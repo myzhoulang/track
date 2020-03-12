@@ -5,6 +5,12 @@ import auto_track from "./auto_track";
 // TODO: search engine
 // TODO: QueryParams
 // TODO: DOMTRACK
+// TODO: Cookie/localstorage
+// TODO: 路由切换收集(区分是否SPA)
+// TODO: 计算两个track 之间的时间
+// TODO: 敏感数据列表
+// TODO: 单一和批量发送数据
+// TODO: 内置一些埋点事件 $pageview $pageleave $input_time
 
 interface config {
   auto_track: boolean;
