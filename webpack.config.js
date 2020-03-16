@@ -1,9 +1,10 @@
 const path = require('path');
+const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 
 module.exports = {
   watch: true,
   watchOptions: {
-    ignored: /node_modules/
+    ignored: [/node_modules/, /dist/]
   },
   mode: 'production',
   devtool: 'inline-source-map',
@@ -27,4 +28,7 @@ module.exports = {
   resolve: {
     extensions: ['.ts', '.js' ]
   },
+  plugins: [
+    new BundleAnalyzerPlugin()
+  ]
 };

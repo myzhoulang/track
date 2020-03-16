@@ -1,7 +1,6 @@
 import utils from "./utils";
 
 interface Track {
-  init: () => void;
   track: (
     event_name: string,
     props: object,
@@ -11,19 +10,13 @@ interface Track {
 }
 
 interface Props {
-	classNames: string[] | string;
-	id: string;
-	tag_name: string;
-	el_text: string;
-	nth_child?: number;
-	nth_of_type?: number;
-	[key: string]: any;
+  [key: string]: any;
 }
 
 const auto_track = {
   init(instance: Track) {
-    this.addDomEventHandler(instance);
     this.ph = instance;
+    this.addDomEventHandler(instance);
   },
 
   addDomEventHandler(instance: Track) {
@@ -31,9 +24,10 @@ const auto_track = {
     utils.addEvent(document, "click", handler);
     utils.addEvent(document, "submit", handler);
     utils.addEvent(document, "change", handler);
+
   },
 
-  shouldTrackDomEvent(el: Element, event: Event) {
+  shouldTrackDomEvent(el: Element, event: Event): boolean {
     const tag = el.tagName.toLowerCase();
     const type = event.type;
     switch (tag) {
@@ -58,7 +52,7 @@ const auto_track = {
   },
 
   shouldTrackDomNode(el: Element): boolean {
-    const elements_blacklist = this.getConfig("track_elements_blacklist");
+    const elements_blacklist = this.ph.getConfig("track_elements_blacklist");
 
     const isNotTrack =
       !el ||
@@ -69,8 +63,10 @@ const auto_track = {
     return !isNotTrack;
   },
 
-  shouldTrackValue(value: any) {
-    if (value === null || utils.isUndefined(value)) {
+  shouldTrackValue(value: any): boolean {
+    const filter_sensitive_data = this.ph.getConfig("filter_sensitive_data");
+    // 值为null、undefined 或者开启不过滤值属性
+    if (value === null || utils.isUndefined(value) || !filter_sensitive_data) {
       return false;
     }
 
@@ -95,7 +91,6 @@ const auto_track = {
     event: MouseEvent | KeyboardEvent,
     callback: () => void = utils.noop
   ) {
-    debugger
     let target: Element = event.target as Element;
     let target_tagname = target.tagName.toLowerCase();
     let target_type = target.getAttribute("type");
@@ -117,7 +112,7 @@ const auto_track = {
     }
 
     if (
-      this.shouldTrackDomEvent(target, event) ||
+      this.shouldTrackDomEvent(target, event) &&
       this.shouldTrackDomNode(target)
     ) {
       const targetList: Element[] = [target];
@@ -131,6 +126,7 @@ const auto_track = {
         targetList.push(current.parentNode as Element);
         current = current.parentNode as Element;
       }
+
 
       targetList.forEach(element => {
         if (utils.isTag(element, "a")) {
@@ -152,7 +148,7 @@ const auto_track = {
           explicitNoTrack = true;
         }
 
-        elements.push(this.getPropsFromElement(element))
+        elements.push(this.getPropsFromElement(element));
       });
 
       if (explicitNoTrack) {
@@ -204,7 +200,7 @@ const auto_track = {
           const text = textContent
             .trim()
             .split(/(\s+)/)
-            .filter(this.shouldTrackValue)
+            .filter(this.shouldTrackValue.bind(this))
             .join("")
             .replace(/[\r\n]/g, " ")
             .replace(/[ ]+/g, " ")
@@ -216,8 +212,9 @@ const auto_track = {
     }
   },
 
-	// 从元素上获取 attr
+  // 从元素上获取 attr
   getPropsFromElement(el: Element): Props {
+    if (!utils.isElement(el)) return;
     const tag_name = el.tagName.toLowerCase();
 
     const props: Props = {
@@ -267,7 +264,7 @@ const auto_track = {
 
     props.nth_child = nth_child;
     props.nth_of_type = nth_of_type;
-    return props;
+    return utils.strip_empty_properties(props);
   },
 
   prev(el: Element | Node) {

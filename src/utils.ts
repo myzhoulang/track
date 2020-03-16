@@ -1,3 +1,4 @@
+const querystring = require("query-string");
 const toString: () => string = Object.prototype.toString;
 
 // svg class 对象
@@ -6,27 +7,6 @@ interface svgClassName {
 }
 
 const utils = {
-  each(
-    obj: any[] | object,
-    iterator: (
-      value: any,
-      index: number | string,
-      array: any[],
-      thisArg?: any
-    ) => void,
-    context: object
-  ) {
-    if (Array.isArray(obj)) {
-      obj.forEach(iterator, context);
-    }
-
-    if (utils.isObject(obj)) {
-      Object.keys(obj).forEach(key => {
-        // @ts-ignore
-        iterator(obj[key], key, obj);
-      }, context);
-    }
-  },
   isFunction(fn: any): boolean {
     return toString.call(fn) === "[object Function]";
   },
@@ -51,16 +31,17 @@ const utils = {
   isRegx(reg: RegExp): boolean {
     return toString.call(reg) === "[object RegExp]";
   },
-  isElement(el: Node): boolean {
+  isElement(el: any): boolean {
     return el && el.nodeType === 1;
   },
   isTextNode(el: Element): boolean {
     return el.nodeType === 3;
   },
   isTag(el: Element, tagName: string): boolean {
+    if (!this.isElement(el)) return;
     return el.tagName.toLowerCase() === tagName.toLowerCase();
   },
-  addEvent(el: Document, type: string, fn: EventListener) {
+  addEvent(el: Node, type: string, fn: EventListener) {
     el.addEventListener(type, fn, false);
   },
   removeEvent(el: Element, type: string, fn: EventListener) {
@@ -83,10 +64,8 @@ const utils = {
         (utils.isString(value) && value.length > 0)
       ) {
         ret[key] = value;
-      }
-
-      // 数组处理
-      if (Array.isArray(value)) {
+      } else if (Array.isArray(value) && value.length > 0) {
+        // 数组处理
         ret[key] = [];
         value.forEach(item => {
           if (Array.isArray(item) || utils.isObject(item)) {
@@ -95,9 +74,8 @@ const utils = {
             ret[key] = value;
           }
         });
-      }
-
-      if (utils.isObject(value)) {
+      } else if (utils.isObject(value) && !utils.isEmptyObject(value)) {
+        // 对象处理
         ret[key] = utils.strip_empty_properties(value);
       }
     });
@@ -126,6 +104,11 @@ const utils = {
   hasClassName(el: Element, className: string) {
     const classNames = utils.getClassNames(el);
     return classNames.includes(className);
+  },
+
+  getQueryParams(url: string = location.href) {
+    const result = querystring.parseUrl(url);
+    return result.query;
   }
 };
 

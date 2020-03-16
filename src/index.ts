@@ -1,3 +1,3 @@
 import Track from "./Track";
-new Track().init();
+new Track();
 export default Track;

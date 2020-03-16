@@ -15,9 +15,11 @@
     "ts-loader": "^6.2.1",
     "typescript": "^3.8.3",
     "webpack": "^4.42.0",
+    "webpack-bundle-analyzer": "^3.6.1",
     "webpack-cli": "^3.3.11"
   },
   "dependencies": {
+    "query-string": "^6.11.1",
     "ua-parser-js": "^0.7.21"
   }
 }
