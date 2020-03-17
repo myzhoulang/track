@@ -3,6 +3,7 @@ import $base_properties from "./base_properties";
 import auto_track from "./auto_track";
 import search_engine from "./search_engine";
 import { LinkTrack, FormTrack } from "./dom_track";
+import store from "./Store";
 
 const querystring = require("query-string");
 
@@ -13,12 +14,29 @@ const querystring = require("query-string");
 // TODO: 路由切换收集(区分是否SPA)
 // TODO: 计算两个track 之间的时间 (x)
 // ✔️ TODO: 敏感数据列表
-// TODO: 单一和批量发送数据 https://manual.sensorsdata.cn/sa/latest/tech_sdk_client_web_use-7538919.html
+// ✔️ TODO: 单一和批量发送数据 https://manual.sensorsdata.cn/sa/latest/tech_sdk_client_web_use-7538919.html
 // TODO: 内置一些埋点事件 $pageview $pageleave $input_time $page_load
+
+interface batchSendConfig {
+  max_length?: number;
+  timeout?: number;
+  interval?: number;
+}
+
+interface trackResponse {
+  status?: number;
+  message?: string;
+  responce?: object;
+}
+
+interface sendOptions {
+  timeout?: number;
+}
 
 interface config {
   auto_track: boolean;
   track_pageview: boolean;
+  track_input_time: boolean;
   track_elements_blacklist: string[];
   request_type: string;
   track_property_blacklist: string[];
@@ -27,13 +45,23 @@ interface config {
   lib_instance_name: string;
   filter_sensitive_data: boolean;
   track_single_page: boolean;
-  batch_send: boolean;
+  batch_send: boolean | batchSendConfig;
   [key: string]: any;
 }
 interface User {
   name?: string;
   email?: string;
 }
+
+// TODO: 常量抽取到常量文件中
+const batch_send_default_options = {
+  max_length: 10,
+  timeout: 5000,
+  interval: 10000
+};
+
+const store_key = "$batch_track_data";
+const inner_events = "$pageview $pageleave $input_time $page_load".split(" ");
 
 class Track {
   // 用户信息
@@ -47,17 +75,20 @@ class Track {
         auto_track: true,
         lib_instance_name: "ph",
         track_pageview: true,
+        track_input_time: true,
         track_link_timeout: 300,
         track_elements_blacklist: ["body"],
         track_property_blacklist: ["style", "data-row-key"],
         filter_sensitive_data: true,
-        request_type: "XHR"
+        request_type: "XHR",
+        batch_send: batch_send_default_options
       },
       config
     );
 
-    if(!this.config['api_host']){
-
+    if (!this.config["api_host"]) {
+      console.error("api_host为空，初始化失败");
+      return;
     }
 
     // @ts-ignore
@@ -65,7 +96,7 @@ class Track {
 
     // auto_track
     if (this.getConfig("auto_track")) {
-      console.log("auto");
+      console.log("auto track");
       this.auto_track();
     }
     // track_pageview
@@ -73,7 +104,27 @@ class Track {
       this.track_pageview();
     }
 
-    this.track_input_time();
+    // 是否开启batch_send
+    // 开启批量处理的时候在页面刷新、跳转导致刷新、关闭的时候会导致
+    // 存在localStorage 中未上报的数据没有时机发送。
+    // 需要监听 window.onunload 事件，在onunload 事件中 使用 navigator.sendBeacon() 发送数据
+    // 使用加载图片方式或ajax同步请求会导致页面的延迟卸载，影响用户体验。
+    // navigator.sendBeacon方法将请求放到浏览器发送队列，并且不会延迟页面的卸载
+    // 但navigator.sendBeacon也有缺点：
+    //    1. 受到队列总数和数据大小可能放入队列失败，
+    //    2. 无法保证发送成功，客户端也无法监听任何事件。
+    //    3. 兼容性也是一个问题
+    // navigator.sendBeacon: https://developer.mozilla.org/zh-CN/docs/Web/API/Navigator/sendBeacon
+    if (this.is_batch_send()) {
+      this.batch_send();
+
+      utils.addEvent(window, "beforeunload", this.send_beacon);
+    }
+
+    // 是否开启表单输入控件 输入时间耗时
+    if (this.getConfig("track_input_time")) {
+      this.track_input_time();
+    }
   }
 
   public auto_track() {
@@ -135,24 +186,100 @@ class Track {
       properties
     });
 
-    this.send_request(data, {}, callback);
+    // 判断是否需要批量处理
+    // 不批量处理或者内置的事件就直接发送
+    // 批量处理就将数据存储到store
+    if (!this.is_batch_send() || inner_events.indexOf(event_name) !== -1) {
+      this.send_request(data, {}, (res: trackResponse) => {
+        // 如果失败将失败数据存储到localStorage
+        if (res.status !== 200) {
+          store.arrayAppend(store_key, data);
+        }
+      });
+    } else {
+      store.arrayAppend(store_key, data);
+    }
+  }
+
+  // 是否批量处理
+  is_batch_send(): boolean {
+    const batch_send_config: boolean | batchSendConfig = this.getConfig(
+      "batch_send"
+    );
+    // 如果
+    if (utils.isBoolean(batch_send_config) && batch_send_config === false) {
+      return false;
+    }
+
+    return true;
+  }
+
+  send_beacon() {
+    const url = this.getConfig("api_host");
+    const data = store.get(store_key);
+    if (data.length < 1) {
+      return;
+    }
+
+    // 判断是否进入队列
+    // 进入队列就默认发送成功
+    // 清空数据
+    if (navigator.sendBeacon(url, JSON.stringify(data))) {
+      store.set(store_key, []);
+    }
+  }
+  // batch
+  batch_send() {
+    const batchConfig: batchSendConfig | boolean = this.getConfig("batch_send");
+    const config: batchSendConfig = utils.isBoolean(batchConfig)
+      ? batch_send_default_options
+      : (batchConfig as batchSendConfig);
+    const _this = this;
+
+    function send() {
+      const data = store.get(store_key);
+      if (!Array.isArray(data) || data.length < 1) {
+        return;
+      }
+      const callback: (res: trackResponse) => void = (res: trackResponse) => {
+        if (res.status === 200) {
+          data.splice(0, config.max_length);
+          store.set(store_key, data);
+        }
+      };
+      _this.send_request(
+        data.slice(0, config.max_length),
+        { timeout: config.timeout },
+        callback
+      );
+      setTimeout(send, config.interval);
+    }
+    send();
   }
 
   private send_request(
     data: object,
-    options: object = {},
-    callback: () => void = utils.noop
+    options: sendOptions,
+    callback: (res: trackResponse) => void = utils.noop
   ) {
+    // 当前无网络状态下直接将上报数据保存到localStorage
+    if (!utils.isOnline) {
+      store.arrayAppend(store_key, data);
+      return;
+    }
+
     const request_type = this.getConfig("request_type");
     const url = this.getConfig("api_host");
-
+    const _callback: (res: trackResponse) => void = (res: trackResponse) => {
+      callback(res);
+    };
     switch (request_type) {
       case "image":
-        this.image_request(url, data, callback);
+        this.image_request(url, data, options, _callback);
         break;
 
       case "XHR":
-        this.ajax_request(url, data, callback);
+        this.ajax_request(url, data, options, _callback);
         break;
     }
   }
@@ -161,14 +288,16 @@ class Track {
   private image_request(
     url: string,
     data: object,
-    callback: (status: number) => void = utils.noop
+    options: sendOptions,
+    callback: (arg: trackResponse) => void = utils.noop
   ) {
     const image = new Image();
     image.onload = () => {
-      callback(1);
+      callback({ status: 200 });
     };
     image.onerror = () => {
-      callback(0);
+      console.error(`上报失败: data = ${JSON.stringify(data)}`);
+      callback({ status: 600 });
     };
     image.src = querystring.stringifyUrl({ url, query: data });
   }
@@ -177,23 +306,26 @@ class Track {
   private ajax_request(
     url: string,
     data: object,
+    options: sendOptions,
     callback: (res: object) => void = utils.noop
   ) {
     const req = new XMLHttpRequest();
     req.open("POST", url, true);
     req.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     req.withCredentials = true;
+    req.timeout = options.timeout;
 
     req.onreadystatechange = () => {
       if (req.readyState === 4) {
         if (req.status === 200) {
           try {
             const response = JSON.parse(req.responseText);
-            callback(response);
+            callback({ status: req.status, response });
           } catch (e) {
             console.error(e);
           }
         } else {
+          console.error(`上报失败: data = ${JSON.stringify(data)}`);
           callback({ status: req.status, error: `ajax: ${url}请求失败` });
         }
       }
@@ -213,17 +345,24 @@ class Track {
 
   // track-pageview
   public track_pageview(page: string = document.location.href) {
-    this.track("ph_page_view", { page });
+    const referrer = querystring.parseUrl(document.referrer);
+    const current = querystring.parseUrl(page);
+    // TODO: 添加更多的 pv 统计逻辑
+    if (referrer.url !== current.url) {
+      this.track("ph_page_view", { page });
+    }
   }
 
   public track_input_time() {
     document.body.addEventListener("focusin", (event: Event) => {
       const el: HTMLInputElement = event.target as HTMLInputElement;
-      const tag_type: string = el.getAttribute('type');
+      const tag_type: string = el.getAttribute("type");
       // 只对输入控件
       if (
-        (utils.isTag(el, 'input') && ['text', 'number'].indexOf(tag_type) !== -1)
-        || utils.isTag(el,'textarea')) {
+        (utils.isTag(el, "input") &&
+          ["text", "number"].indexOf(tag_type) !== -1) ||
+        utils.isTag(el, "textarea")
+      ) {
         // 如果当前元素是 input 输入框
         el.dataset.focus_time = String(Date.now());
         el.dataset.focus_value = el.value;

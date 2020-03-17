@@ -247,7 +247,7 @@ const auto_track = {
         return;
       }
 
-      props[`attr_${attr_name}`] = el.getAttribute(attr_name);
+      props[`${attr_name}`] = el.getAttribute(attr_name);
     });
 
     // 定位元素dom树中的位置

@@ -10,10 +10,10 @@ const utils = {
   isFunction(fn: any): boolean {
     return toString.call(fn) === "[object Function]";
   },
-  isBoolean(value: boolean): boolean {
+  isBoolean(value: any): boolean {
     return toString.call(value) === "[object Boolean]";
   },
-  isObject(obj: object): boolean {
+  isObject(obj: any): boolean {
     return obj === Object(obj) && !Array.isArray(obj);
   },
   isEmptyObject(obj: object): boolean {
@@ -41,7 +41,7 @@ const utils = {
     if (!this.isElement(el)) return;
     return el.tagName.toLowerCase() === tagName.toLowerCase();
   },
-  addEvent(el: Node, type: string, fn: EventListener) {
+  addEvent(el: Node | Window, type: string, fn: EventListener) {
     el.addEventListener(type, fn, false);
   },
   removeEvent(el: Element, type: string, fn: EventListener) {
@@ -53,7 +53,7 @@ const utils = {
     const ret: { [key: string]: any } = {};
 
     Object.entries(obj).forEach(([key, value]) => {
-      if (value === null || value === undefined) {
+      if (value === null || value === undefined || utils.isEmptyObject(value)) {
         return;
       }
       // 基本数据类型
@@ -109,7 +109,9 @@ const utils = {
   getQueryParams(url: string = location.href) {
     const result = querystring.parseUrl(url);
     return result.query;
-  }
+  },
+
+  isOnline: navigator.onLine
 };
 
 export default utils;

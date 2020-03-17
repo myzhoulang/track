@@ -4,6 +4,7 @@ const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPl
 module.exports = {
   watch: true,
   watchOptions: {
+    aggregateTimeout:500,
     ignored: [/node_modules/, /dist/]
   },
   mode: 'production',

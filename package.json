@@ -1,5 +1,5 @@
 {
-  "name": "track",
+  "name": "@zhou.lang/track",
   "version": "1.0.0",
   "description": "",
   "main": "dist/track.js",
@@ -7,7 +7,7 @@
     "build": "webpack"
   },
   "keywords": [],
-  "author": "",
+  "author": "zhou.lang",
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^13.9.0",
@@ -19,7 +19,6 @@
     "webpack-cli": "^3.3.11"
   },
   "dependencies": {
-    "query-string": "^6.11.1",
-    "ua-parser-js": "^0.7.21"
+    "query-string": "^6.11.1"
   }
 }
