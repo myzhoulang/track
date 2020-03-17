@@ -1,13 +1,15 @@
 {
   "name": "@zhou.lang/track",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "前端埋点",
   "main": "dist/track.js",
   "homepage": "https://github.com/myzhoulang/track",
   "scripts": {
     "build": "webpack"
   },
-  "keywords": ["track"],
+  "keywords": [
+    "track"
+  ],
   "author": "zhou.lang",
   "license": "ISC",
   "devDependencies": {
