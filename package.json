@@ -5,7 +5,8 @@
   "main": "dist/track.js",
   "homepage": "https://github.com/myzhoulang/track",
   "scripts": {
-    "build": "webpack"
+    "build": "webpack",
+    "postversion": "git push --follow-tags"
   },
   "keywords": [
     "track"

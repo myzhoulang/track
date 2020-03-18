@@ -114,4 +114,11 @@ const utils = {
   isOnline: navigator.onLine
 };
 
+// 监测网络状态
+function updateOnlineStatus() {
+  utils.isOnline = navigator.onLine;
+}
+utils.addEvent(window, "online", updateOnlineStatus);
+utils.addEvent(window, "offline", updateOnlineStatus);
+
 export default utils;

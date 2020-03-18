@@ -4,6 +4,7 @@ import auto_track from "./auto_track";
 import search_engine from "./search_engine";
 import { LinkTrack, FormTrack } from "./dom_track";
 import store from "./Store";
+import "./history";
 
 const querystring = require("query-string");
 
@@ -11,7 +12,7 @@ const querystring = require("query-string");
 // ✔️ TODO: QueryParams
 // ✔️ TODO: DOMTRACK
 // TODO: Cookie/localstorage
-// TODO: 路由切换收集(区分是否SPA)
+// ✔ TODO: 路由切换收集(区分是否SPA)
 // TODO: 计算两个track 之间的时间 (x)
 // ✔️ TODO: 敏感数据列表
 // ✔️ TODO: 单一和批量发送数据 https://manual.sensorsdata.cn/sa/latest/tech_sdk_client_web_use-7538919.html
@@ -21,6 +22,13 @@ interface batchSendConfig {
   max_length?: number;
   timeout?: number;
   interval?: number;
+}
+
+interface TrackOptions {
+  callback_fired?: boolean;
+  href?: string;
+  new_tab?: boolean;
+  element?: Element | HTMLFormElement;
 }
 
 interface trackResponse {
@@ -63,15 +71,23 @@ const batch_send_default_options = {
 const store_key = "$batch_track_data";
 const inner_events = "$pageview $pageleave $input_time $page_load".split(" ");
 
+// const ua = JSON.stringify({ ua: navigator.userAgent, now: performance.now() });
+// const headers = { type: 'application/json' };
+// const blob = new Blob([ua], headers);
+// const blob = new Blob([`room_id=123`], {
+//   type: "application/x-www-form-urlencoded"
+// });
+// navigator.sendBeacon("http://127.0.0.1:3000/api/track", blob);
+
 class Track {
   // 用户信息
-  private user: User;
+  private public_data: object;
   private readonly config: config;
 
   constructor(config?: config) {
     this.config = Object.assign(
       {
-        api_host: "http://127.0.0.1:8081/api",
+        api_host: "http://127.0.0.1:3000/api/track",
         auto_track: true,
         lib_instance_name: "ph",
         track_pageview: true,
@@ -117,8 +133,8 @@ class Track {
     // navigator.sendBeacon: https://developer.mozilla.org/zh-CN/docs/Web/API/Navigator/sendBeacon
     if (this.is_batch_send()) {
       this.batch_send();
-
-      utils.addEvent(window, "beforeunload", this.send_beacon);
+      utils.addEvent(window, "beforeunload", this.send_beacon.bind(this));
+      utils.addEvent(window, "online", this.send_beacon.bind(this));
     }
 
     // 是否开启表单输入控件 输入时间耗时
@@ -132,15 +148,15 @@ class Track {
   }
 
   // 设置登录用户信息
-  public setUser(user: User) {
-    this.user = user;
+  public add_public_data(data: object) {
+    this.public_data = data;
   }
 
   // track
   public track(
     event_name: string,
     props: object = {},
-    options: object = {},
+    options?: TrackOptions,
     callback: () => void = utils.noop
   ) {
     if (utils.isUndefined(event_name)) {
@@ -167,7 +183,7 @@ class Track {
     // 组装数据
     const properties = Object.assign(
       {
-        user: this.user,
+        ...this.public_data,
         $search_engine,
         $current_page,
         $base_properties
@@ -189,6 +205,7 @@ class Track {
     // 判断是否需要批量处理
     // 不批量处理或者内置的事件就直接发送
     // 批量处理就将数据存储到store
+
     if (!this.is_batch_send() || inner_events.indexOf(event_name) !== -1) {
       this.send_request(data, {}, (res: trackResponse) => {
         // 如果失败将失败数据存储到localStorage
@@ -214,7 +231,8 @@ class Track {
     return true;
   }
 
-  send_beacon() {
+  send_beacon(e: Event) {
+    console.log("send_beacon");
     const url = this.getConfig("api_host");
     const data = store.get(store_key);
     if (data.length < 1) {
@@ -224,7 +242,10 @@ class Track {
     // 判断是否进入队列
     // 进入队列就默认发送成功
     // 清空数据
-    if (navigator.sendBeacon(url, JSON.stringify(data))) {
+    const blob = new Blob([JSON.stringify(data)], {
+      type: "application/x-www-form-urlencoded"
+    });
+    if (navigator.sendBeacon(url, blob)) {
       store.set(store_key, []);
     }
   }
@@ -238,21 +259,24 @@ class Track {
 
     function send() {
       const data = store.get(store_key);
-      if (!Array.isArray(data) || data.length < 1) {
-        return;
-      }
       const callback: (res: trackResponse) => void = (res: trackResponse) => {
         if (res.status === 200) {
           data.splice(0, config.max_length);
           store.set(store_key, data);
         }
       };
-      _this.send_request(
-        data.slice(0, config.max_length),
-        { timeout: config.timeout },
-        callback
-      );
-      setTimeout(send, config.interval);
+      if (Array.isArray(data) && data.length > 0) {
+        _this.send_request(
+          data.slice(0, config.max_length),
+          { timeout: config.timeout },
+          callback
+        );
+      }
+      // 判断网络是否正常
+      // 网络正常能访问才会走轮询
+      if (utils.isOnline) {
+        setTimeout(send, config.interval);
+      }
     }
     send();
   }
@@ -312,7 +336,7 @@ class Track {
     const req = new XMLHttpRequest();
     req.open("POST", url, true);
     req.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    req.withCredentials = true;
+    // req.withCredentials = true;
     req.timeout = options.timeout;
 
     req.onreadystatechange = () => {
@@ -330,7 +354,9 @@ class Track {
         }
       }
     };
-
+    if (!Array.isArray(data)) {
+      data = [data];
+    }
     req.send(JSON.stringify(data));
   }
 
@@ -345,11 +371,17 @@ class Track {
 
   // track-pageview
   public track_pageview(page: string = document.location.href) {
-    const referrer = querystring.parseUrl(document.referrer);
-    const current = querystring.parseUrl(page);
-    // TODO: 添加更多的 pv 统计逻辑
-    if (referrer.url !== current.url) {
-      this.track("ph_page_view", { page });
+    // const referrer = querystring.parseUrl(document.referrer);
+    // const current = querystring.parseUrl(page);
+    this.track("ph_page_view", { page });
+    const track_single_page = this.getConfig("track_single_page");
+
+    if (track_single_page) {
+      // 这里的 popsate 事件能监听到 history.pushState 和 history.replaceState
+      // history.ts 文件中已经重写了
+      utils.addEvent(window, "popstate", () => {
+        this.track("ph_page_view", { page: document.location.href });
+      });
     }
   }
 

@@ -5,7 +5,7 @@ interface TrackOptions {
   callback_fired?: boolean;
   href?: string;
   new_tab?: boolean;
-  element?: HTMLFormElement;
+  element?: Element | HTMLFormElement;
 }
 
 class DomTrack {
@@ -36,7 +36,8 @@ class DomTrack {
     elements.forEach(el => {
       utils.addEvent(el, this.override_event, (event: Event) => {
         const options: TrackOptions = {
-          callback_fired: false
+          callback_fired: false,
+          element: el as Element
         };
         const timeout = this.ph.getConfig("track_link_timeout");
 
@@ -140,7 +141,7 @@ class FormTrack extends DomTrack {
   public after_track_handler(props: object, options: TrackOptions) {
     super.after_track_handler(props, options);
 
-    setTimeout(() => options.element.submit(), 0);
+    setTimeout(() => (options.element as HTMLFormElement).submit(), 0);
   }
 }
 
