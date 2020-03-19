@@ -1,6 +1,6 @@
 import utils from "./utils";
 import $base_properties from "./base_properties";
-import {auto_track, TrackOptions} from "./auto_track";
+import { auto_track, TrackOptions } from "./auto_track";
 import search_engine from "./search_engine";
 import { LinkTrack, FormTrack } from "./dom_track";
 import {
@@ -26,7 +26,6 @@ import "./polyfill";
 // ✔️ TODO: 单一和批量发送数据 https://manual.sensorsdata.cn/sa/latest/tech_sdk_client_web_use-7538919.html
 // TODO: 内置一些埋点事件 $pageview $pageleave $input_time $page_load
 
-
 interface TrackConfigOptions {
   auto_track?: boolean;
   track_pageview?: boolean;
@@ -38,6 +37,7 @@ interface TrackConfigOptions {
   api_host?: string;
   lib_instance_name?: string;
   filter_sensitive_data?: boolean;
+  send_cookie?:boolean;
   track_single_page?: boolean;
   batch_send?: boolean | BatchSendConfig;
   [key: string]: any;
@@ -88,6 +88,9 @@ class Track {
       this.track_pageview();
     }
 
+    // track_pageleave
+    utils.addEvent(window, "unload", this.track_pageleave.bind(this));
+
     // 是否开启batch_send
     // 开启批量处理的时候在页面刷新、跳转导致刷新、关闭的时候会导致
     // 存在localStorage 中未上报的数据没有时机发送。
@@ -125,7 +128,7 @@ class Track {
     event_name: string,
     props: object = {},
     options: TrackOptions = {},
-    callback: () => void = utils.noop
+    callback: Callback = utils.noop
   ) {
     if (utils.isUndefined(event_name)) {
       console.log("event_name 不能为空");
@@ -170,6 +173,8 @@ class Track {
       properties
     });
 
+    // 使用 navigator.sendBeacon 发送数据
+    // a 链接导致的跳转会使用此方式
     if (options.send_beacon) {
       this.beacon_request(data);
       return;
@@ -178,7 +183,6 @@ class Track {
     // 判断是否需要批量处理
     // 不批量处理或者内置的事件就直接发送
     // 批量处理就将数据存储到store
-
     if (!this.is_batch_send() || EVENTS.indexOf(event_name) !== -1) {
       this.send_request(data, {}, (res: TrackResponse) => {
         // 如果失败将失败数据存储到localStorage
@@ -217,16 +221,20 @@ class Track {
   public track_pageview(page: string = document.location.href) {
     // const referrer = querystring.parseUrl(document.referrer);
     // const current = querystring.parseUrl(page);
-    this.track("ph_page_view", { page });
+    this.track("$pageview", { page });
     const track_single_page = this.getConfig("track_single_page");
 
     if (track_single_page) {
       // 这里的 popstate 事件能监听到 history.pushState 和 history.replaceState
       // polyfill.ts 文件中已经重写了
       utils.addEvent(window, "popstate", () => {
-        this.track("ph_page_view", { page: document.location.href });
+        this.track("$pageview", { page: document.location.href });
       });
     }
+  }
+
+  public track_pageleave(page: string = document.location.href) {
+    this.track("$pageleave", { page });
   }
 
   public track_input_time() {

@@ -126,7 +126,6 @@ export const auto_track = {
       let linkTrack: LinkTrack;
       targetList.forEach(element => {
         if (utils.isTag(element, "a")) {
-          event.preventDefault();
           linkTrack = new LinkTrack(this.ph);
           linkTrack.event_handler(event, element, options);
         }

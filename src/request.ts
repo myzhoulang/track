@@ -48,7 +48,7 @@ export function ajax_request(
   const req = new XMLHttpRequest();
   req.open("POST", url, true);
   req.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-  // req.withCredentials = true;
+  req.withCredentials = true;
   req.timeout = options.timeout;
 
   req.onreadystatechange = () => {
@@ -121,8 +121,9 @@ export function beacon_request(data: object, callback?: () => void, options: Sen
     // 判断是否进入队列
     // 进入队列就默认发送成功
     // 清空数据
-    const blob = new Blob([JSON.stringify(data)], {
+    const blob:Blob = new Blob([JSON.stringify(data)], {
       type: "application/x-www-form-urlencoded"
+      // type: 'application/json'
     });
 
     navigator.sendBeacon(url, blob) && store.set(STORE_KEY, []);
