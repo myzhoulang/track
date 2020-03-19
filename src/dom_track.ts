@@ -5,6 +5,7 @@ interface TrackOptions {
   callback_fired?: boolean;
   href?: string;
   new_tab?: boolean;
+  send_beacon?: boolean;
   element?: Element | HTMLFormElement;
 }
 
@@ -37,7 +38,8 @@ class DomTrack {
       utils.addEvent(el, this.override_event, (event: Event) => {
         const options: TrackOptions = {
           callback_fired: false,
-          element: el as Element
+          element: el as Element,
+          send_beacon: true,
         };
         const timeout = this.ph.getConfig("track_link_timeout");
 
@@ -90,7 +92,7 @@ class LinkTrack extends DomTrack {
     super(instance);
   }
 
-  protected event_handler(
+  public event_handler(
     event: MouseEvent | KeyboardEvent,
     el: Element,
     options: TrackOptions

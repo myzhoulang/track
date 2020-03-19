@@ -1,6 +1,15 @@
 import utils from "./utils";
+import { LinkTrack } from "./dom_track";
 
-interface Track {
+export interface TrackOptions {
+  callback_fired?: boolean;
+  href?: string;
+  new_tab?: boolean;
+  send_beacon?: boolean;
+  element?: Element | HTMLFormElement;
+}
+
+export interface Track {
   track: (
     event_name: string,
     props: object,
@@ -13,7 +22,7 @@ interface Props {
   [key: string]: any;
 }
 
-const auto_track = {
+export const auto_track = {
   init(instance: Track) {
     this.ph = instance;
     this.addDomEventHandler(instance);
@@ -24,7 +33,6 @@ const auto_track = {
     utils.addEvent(document, "click", handler);
     utils.addEvent(document, "submit", handler);
     utils.addEvent(document, "change", handler);
-
   },
 
   shouldTrackDomEvent(el: Element, event: Event): boolean {
@@ -89,23 +97,12 @@ const auto_track = {
   track_event(
     instance: Track,
     event: MouseEvent | KeyboardEvent,
+    options: TrackOptions = {},
     callback: () => void = utils.noop
   ) {
     let target: Element = event.target as Element;
     let target_tagname = target.tagName.toLowerCase();
     let target_type = target.getAttribute("type");
-    // 判断是否已经触发过回调
-    let callback_fired: boolean = false;
-    const urlRegexp = /^(((ht|f)tps?):\/\/)?[\w-]+(\.[\w-]+)+([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])?$/;
-
-    // track 回调
-    function track_after(href: string) {
-      if (callback_fired || !urlRegexp.test(href)) {
-        return;
-      }
-      callback_fired = true;
-      window.location.href = href;
-    }
 
     if (utils.isTextNode(target)) {
       target = target.parentNode as Element;
@@ -126,22 +123,12 @@ const auto_track = {
         targetList.push(current.parentNode as Element);
         current = current.parentNode as Element;
       }
-
-
+      let linkTrack: LinkTrack;
       targetList.forEach(element => {
         if (utils.isTag(element, "a")) {
-          // 是否是新窗口打开
-          const new_tab =
-            event.which === 2 ||
-            event.metaKey ||
-            event.ctrlKey ||
-            element.getAttribute("target") === "blank";
-          href = element.getAttribute("href");
-
-          if (urlRegexp.test(href) && !new_tab) {
-            event.preventDefault();
-            setTimeout(track_after, 300);
-          }
+          event.preventDefault();
+          linkTrack = new LinkTrack(this.ph);
+          linkTrack.event_handler(event, element, options);
         }
 
         if (utils.hasClassName(element, "ph-no-track")) {
@@ -173,20 +160,19 @@ const auto_track = {
         value = (<HTMLInputElement>target).value;
       }
 
-      instance.track(
-        "$web_event",
-        {
-          $elements: elements,
-          $el_href: href,
-          $el_value: value,
-          $el_text: elementText
-        },
-        {},
-        () => {
-          track_after(href);
-          callback();
-        }
-      );
+      // 发送给的数据
+      const props = {
+        $elements: elements,
+        $el_href: href,
+        $el_value: value,
+        $el_text: elementText
+      }
+      if(linkTrack){
+        options.send_beacon = true
+      }
+      instance.track("$web_click", props, options, callback);
+
+      linkTrack && linkTrack.after_track_handler(props, options);
     }
   },
 
@@ -284,5 +270,3 @@ const auto_track = {
     }
   }
 };
-
-export default auto_track;

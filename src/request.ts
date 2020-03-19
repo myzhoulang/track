@@ -7,25 +7,25 @@ import utils from "./utils";
 export interface SendOptions {
   timeout?: number;
 }
-
-export interface TrackResponse {
-  status: number;
-  message?: string;
-  data?: object;
-}
-
-interface BatchSendConfig {
+export interface BatchSendConfig {
   max_length?: number;
   timeout?: number;
   interval?: number;
 }
+export interface TrackResponse {
+  status?: number;
+  message?: string;
+  data?: object;
+}
+
+export type Callback = (res?: TrackResponse) => void;
 
 // Image 请求方式上报数据
 export function image_request(
   url: string,
   data: object,
   options: SendOptions,
-  callback: (res: TrackResponse) => void = utils.noop
+  callback: Callback = utils.noop
 ) {
   const image = new Image();
   image.onload = () => {
@@ -43,7 +43,7 @@ export function ajax_request(
   url: string,
   data: object,
   options: SendOptions,
-  callback: (res: TrackResponse) => void = utils.noop
+  callback: Callback = utils.noop
 ) {
   const req = new XMLHttpRequest();
   req.open("POST", url, true);
@@ -75,7 +75,7 @@ export function ajax_request(
 export function send_request(
   data: object,
   options: SendOptions,
-  callback: (res?: TrackResponse) => void = utils.noop
+  callback: Callback = utils.noop
 ) {
   // 当前无网络状态下直接将上报数据保存到localStorage
   if (!utils.isOnline) {
@@ -83,7 +83,7 @@ export function send_request(
     return;
   }
 
-  const _callback: (res: TrackResponse) => void = (res: TrackResponse) => {
+  const _callback:Callback = (res: TrackResponse) => {
     callback(res);
   };
 
@@ -104,6 +104,7 @@ export function send_request(
 // 在页面 unload  或者 刷新的时候
 // 使用该方法发送数据
 export function send_store(e: Event) {
+  e.returnValue = false
   console.log("send_store");
   const url = this.getConfig("api_host");
   const data = store.get(STORE_KEY);
@@ -111,10 +112,11 @@ export function send_store(e: Event) {
     return;
   }
 
-  beacon(url, data);
+  beacon_request(url, data);
 }
 
-export function beacon(url: string, data: object, callback?: () => void) {
+export function beacon_request(data: object, callback?: () => void, options: SendOptions = {}) {
+  const url = this.getConfig("api_host");
   if (typeof navigator.sendBeacon === "function") {
     // 判断是否进入队列
     // 进入队列就默认发送成功
@@ -125,9 +127,10 @@ export function beacon(url: string, data: object, callback?: () => void) {
 
     navigator.sendBeacon(url, blob) && store.set(STORE_KEY, []);
   } else {
-    ajax_request(url, data, {}, callback);
+    ajax_request(url, data, options, callback);
   }
 }
+
 
 // 批量发送事件
 export function seed_batch() {
@@ -138,7 +141,7 @@ export function seed_batch() {
 
   function send() {
     const data = store.get(STORE_KEY);
-    const callback: (res: TrackResponse) => void = (res: TrackResponse) => {
+    const callback: Callback = (res: TrackResponse) => {
       if (res.status === 200) {
         data.splice(0, config.max_length);
         store.set(STORE_KEY, data);

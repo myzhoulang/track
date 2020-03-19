@@ -1,9 +1,17 @@
 import utils from "./utils";
 import $base_properties from "./base_properties";
-import auto_track from "./auto_track";
+import {auto_track, TrackOptions} from "./auto_track";
 import search_engine from "./search_engine";
 import { LinkTrack, FormTrack } from "./dom_track";
-import { send_request, send_store, seed_batch } from "./request";
+import {
+  send_request,
+  send_store,
+  seed_batch,
+  beacon_request,
+  BatchSendConfig,
+  TrackResponse,
+  Callback
+} from "./request";
 import { STORE_KEY, EVENTS, BATCH_SEND_DEFAULT_OPTIONS } from "./const";
 import store from "./Store";
 import "./polyfill";
@@ -18,24 +26,6 @@ import "./polyfill";
 // ✔️ TODO: 单一和批量发送数据 https://manual.sensorsdata.cn/sa/latest/tech_sdk_client_web_use-7538919.html
 // TODO: 内置一些埋点事件 $pageview $pageleave $input_time $page_load
 
-interface batchSendConfig {
-  max_length?: number;
-  timeout?: number;
-  interval?: number;
-}
-
-interface TrackOptions {
-  callback_fired?: boolean;
-  href?: string;
-  new_tab?: boolean;
-  element?: Element | HTMLFormElement;
-}
-
-interface trackResponse {
-  status?: number;
-  message?: string;
-  response?: object;
-}
 
 interface TrackConfigOptions {
   auto_track?: boolean;
@@ -49,7 +39,7 @@ interface TrackConfigOptions {
   lib_instance_name?: string;
   filter_sensitive_data?: boolean;
   track_single_page?: boolean;
-  batch_send?: boolean | batchSendConfig;
+  batch_send?: boolean | BatchSendConfig;
   [key: string]: any;
 }
 
@@ -60,6 +50,7 @@ class Track {
   private send_request = send_request.bind(this);
   private send_store = send_store.bind(this);
   private seed_batch = seed_batch.bind(this);
+  private beacon_request = beacon_request.bind(this);
 
   constructor(config?: { batch_send: boolean }) {
     this.config = Object.assign(
@@ -133,7 +124,7 @@ class Track {
   public track(
     event_name: string,
     props: object = {},
-    options?: TrackOptions,
+    options: TrackOptions = {},
     callback: () => void = utils.noop
   ) {
     if (utils.isUndefined(event_name)) {
@@ -179,13 +170,17 @@ class Track {
       properties
     });
 
+    if (options.send_beacon) {
+      this.beacon_request(data);
+      return;
+    }
+
     // 判断是否需要批量处理
     // 不批量处理或者内置的事件就直接发送
     // 批量处理就将数据存储到store
 
     if (!this.is_batch_send() || EVENTS.indexOf(event_name) !== -1) {
-      debugger;
-      this.send_request(data, {}, (res: trackResponse) => {
+      this.send_request(data, {}, (res: TrackResponse) => {
         // 如果失败将失败数据存储到localStorage
         if (res.status !== 200) {
           store.arrayAppend(STORE_KEY, data);
@@ -198,7 +193,7 @@ class Track {
 
   // 是否批量处理
   private is_batch_send(): boolean {
-    const batch_send_config: boolean | batchSendConfig = this.getConfig(
+    const batch_send_config: boolean | BatchSendConfig = this.getConfig(
       "batch_send"
     );
 
@@ -274,45 +269,9 @@ class Track {
 
     utils.addEvent(document.body, "focusin", onFocusin.bind(this));
     utils.addEvent(document.body, "focusout", onFocusout.bind(this));
-
-    // document.body.addEventListener("focusin", (event: Event) => {
-    //   const el: HTMLInputElement = event.target as HTMLInputElement;
-    //   const tag_type: string = el.getAttribute("type");
-    //   // 只对输入控件
-    //   if (
-    //     (utils.isTag(el, "input") &&
-    //       ["text", "number"].indexOf(tag_type) !== -1) ||
-    //     utils.isTag(el, "textarea")
-    //   ) {
-    //     // 如果当前元素是 input 输入框
-    //     el.dataset.focus_time = String(Date.now());
-    //     el.dataset.focus_value = el.value;
-    //   }
-    // });
-
-    // 监听 focusout 事件，会在 input 失去焦点时触发，此事件支持冒泡
-    // document.body.addEventListener("focusout", (event: Event) => {
-    //   // const target = event.target;
-    //   const target: HTMLInputElement = event.target as HTMLInputElement;
-    //   const tag_name: string = target.tagName.toLowerCase();
-    //   if (tag_name === "input") {
-    //     // 如果当前元素是 input 输入框
-    //     const now = new Date().valueOf();
-    //
-    //     const begin_time: number = parseInt(target.dataset.focus_time, 10);
-    //     const requestData = {
-    //       input_name: target.name,
-    //       begin_time: parseInt(target.dataset.focus_time),
-    //       end_time: now,
-    //       event_duration: now - begin_time,
-    //       previous_value: target.dataset.focus_value,
-    //       after_value: target.value
-    //     };
-    //     // 调用 track() 方法发送自定义事件
-    //     this.track("$input_time", { $input_time: requestData });
-    //   }
-    // });
   }
+
+  // store send()
 
   // dom track
   public track_link(
@@ -329,7 +288,7 @@ class Track {
     querySelector: string | Node,
     event_name: string,
     props: object,
-    callback?: () => void
+    callback?: Callback
   ) {
     const link: FormTrack = new FormTrack(this);
     link.track(querySelector, event_name, props, callback);
