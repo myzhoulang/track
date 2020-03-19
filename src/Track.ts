@@ -3,10 +3,10 @@ import $base_properties from "./base_properties";
 import auto_track from "./auto_track";
 import search_engine from "./search_engine";
 import { LinkTrack, FormTrack } from "./dom_track";
+import { send_request, send_store, seed_batch } from "./request";
+import { STORE_KEY, EVENTS, BATCH_SEND_DEFAULT_OPTIONS } from "./const";
 import store from "./Store";
-import "./history";
-
-const querystring = require("query-string");
+import "./polyfill";
 
 // ✔️ TODO: search engine
 // ✔️ TODO: QueryParams
@@ -34,57 +34,34 @@ interface TrackOptions {
 interface trackResponse {
   status?: number;
   message?: string;
-  responce?: object;
+  response?: object;
 }
 
-interface sendOptions {
-  timeout?: number;
-}
-
-interface config {
-  auto_track: boolean;
-  track_pageview: boolean;
-  track_input_time: boolean;
-  track_elements_blacklist: string[];
-  request_type: string;
-  track_property_blacklist: string[];
-  track_link_timeout: number;
-  api_host: string;
-  lib_instance_name: string;
-  filter_sensitive_data: boolean;
-  track_single_page: boolean;
-  batch_send: boolean | batchSendConfig;
+interface TrackConfigOptions {
+  auto_track?: boolean;
+  track_pageview?: boolean;
+  track_input_time?: boolean;
+  track_elements_blacklist?: string[];
+  request_type?: string;
+  track_property_blacklist?: string[];
+  track_link_timeout?: number;
+  api_host?: string;
+  lib_instance_name?: string;
+  filter_sensitive_data?: boolean;
+  track_single_page?: boolean;
+  batch_send?: boolean | batchSendConfig;
   [key: string]: any;
 }
-interface User {
-  name?: string;
-  email?: string;
-}
-
-// TODO: 常量抽取到常量文件中
-const batch_send_default_options = {
-  max_length: 10,
-  timeout: 5000,
-  interval: 10000
-};
-
-const store_key = "$batch_track_data";
-const inner_events = "$pageview $pageleave $input_time $page_load".split(" ");
-
-// const ua = JSON.stringify({ ua: navigator.userAgent, now: performance.now() });
-// const headers = { type: 'application/json' };
-// const blob = new Blob([ua], headers);
-// const blob = new Blob([`room_id=123`], {
-//   type: "application/x-www-form-urlencoded"
-// });
-// navigator.sendBeacon("http://127.0.0.1:3000/api/track", blob);
 
 class Track {
   // 用户信息
   private public_data: object;
-  private readonly config: config;
+  private readonly config: TrackConfigOptions;
+  private send_request = send_request.bind(this);
+  private send_store = send_store.bind(this);
+  private seed_batch = seed_batch.bind(this);
 
-  constructor(config?: config) {
+  constructor(config?: { batch_send: boolean }) {
     this.config = Object.assign(
       {
         api_host: "http://127.0.0.1:3000/api/track",
@@ -97,7 +74,7 @@ class Track {
         track_property_blacklist: ["style", "data-row-key"],
         filter_sensitive_data: true,
         request_type: "XHR",
-        batch_send: batch_send_default_options
+        batch_send: BATCH_SEND_DEFAULT_OPTIONS
       },
       config
     );
@@ -132,9 +109,9 @@ class Track {
     //    3. 兼容性也是一个问题
     // navigator.sendBeacon: https://developer.mozilla.org/zh-CN/docs/Web/API/Navigator/sendBeacon
     if (this.is_batch_send()) {
-      this.batch_send();
-      utils.addEvent(window, "beforeunload", this.send_beacon.bind(this));
-      utils.addEvent(window, "online", this.send_beacon.bind(this));
+      this.seed_batch();
+      utils.addEvent(window, "beforeunload", this.send_store.bind(this));
+      utils.addEvent(window, "online", this.send_store.bind(this));
     }
 
     // 是否开启表单输入控件 输入时间耗时
@@ -147,7 +124,7 @@ class Track {
     auto_track.init(this);
   }
 
-  // 设置登录用户信息
+  // 手动添加公共数据
   public add_public_data(data: object) {
     this.public_data = data;
   }
@@ -206,158 +183,30 @@ class Track {
     // 不批量处理或者内置的事件就直接发送
     // 批量处理就将数据存储到store
 
-    if (!this.is_batch_send() || inner_events.indexOf(event_name) !== -1) {
+    if (!this.is_batch_send() || EVENTS.indexOf(event_name) !== -1) {
+      debugger;
       this.send_request(data, {}, (res: trackResponse) => {
         // 如果失败将失败数据存储到localStorage
         if (res.status !== 200) {
-          store.arrayAppend(store_key, data);
+          store.arrayAppend(STORE_KEY, data);
         }
       });
     } else {
-      store.arrayAppend(store_key, data);
+      store.arrayAppend(STORE_KEY, data);
     }
   }
 
   // 是否批量处理
-  is_batch_send(): boolean {
+  private is_batch_send(): boolean {
     const batch_send_config: boolean | batchSendConfig = this.getConfig(
       "batch_send"
     );
-    // 如果
+
     if (utils.isBoolean(batch_send_config) && batch_send_config === false) {
       return false;
     }
 
     return true;
-  }
-
-  send_beacon(e: Event) {
-    console.log("send_beacon");
-    const url = this.getConfig("api_host");
-    const data = store.get(store_key);
-    if (data.length < 1) {
-      return;
-    }
-
-    // 判断是否进入队列
-    // 进入队列就默认发送成功
-    // 清空数据
-    const blob = new Blob([JSON.stringify(data)], {
-      type: "application/x-www-form-urlencoded"
-    });
-    if (navigator.sendBeacon(url, blob)) {
-      store.set(store_key, []);
-    }
-  }
-  // batch
-  batch_send() {
-    const batchConfig: batchSendConfig | boolean = this.getConfig("batch_send");
-    const config: batchSendConfig = utils.isBoolean(batchConfig)
-      ? batch_send_default_options
-      : (batchConfig as batchSendConfig);
-    const _this = this;
-
-    function send() {
-      const data = store.get(store_key);
-      const callback: (res: trackResponse) => void = (res: trackResponse) => {
-        if (res.status === 200) {
-          data.splice(0, config.max_length);
-          store.set(store_key, data);
-        }
-      };
-      if (Array.isArray(data) && data.length > 0) {
-        _this.send_request(
-          data.slice(0, config.max_length),
-          { timeout: config.timeout },
-          callback
-        );
-      }
-      // 判断网络是否正常
-      // 网络正常能访问才会走轮询
-      if (utils.isOnline) {
-        setTimeout(send, config.interval);
-      }
-    }
-    send();
-  }
-
-  private send_request(
-    data: object,
-    options: sendOptions,
-    callback: (res: trackResponse) => void = utils.noop
-  ) {
-    // 当前无网络状态下直接将上报数据保存到localStorage
-    if (!utils.isOnline) {
-      store.arrayAppend(store_key, data);
-      return;
-    }
-
-    const request_type = this.getConfig("request_type");
-    const url = this.getConfig("api_host");
-    const _callback: (res: trackResponse) => void = (res: trackResponse) => {
-      callback(res);
-    };
-    switch (request_type) {
-      case "image":
-        this.image_request(url, data, options, _callback);
-        break;
-
-      case "XHR":
-        this.ajax_request(url, data, options, _callback);
-        break;
-    }
-  }
-
-  // image request
-  private image_request(
-    url: string,
-    data: object,
-    options: sendOptions,
-    callback: (arg: trackResponse) => void = utils.noop
-  ) {
-    const image = new Image();
-    image.onload = () => {
-      callback({ status: 200 });
-    };
-    image.onerror = () => {
-      console.error(`上报失败: data = ${JSON.stringify(data)}`);
-      callback({ status: 600 });
-    };
-    image.src = querystring.stringifyUrl({ url, query: data });
-  }
-
-  // ajax
-  private ajax_request(
-    url: string,
-    data: object,
-    options: sendOptions,
-    callback: (res: object) => void = utils.noop
-  ) {
-    const req = new XMLHttpRequest();
-    req.open("POST", url, true);
-    req.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    // req.withCredentials = true;
-    req.timeout = options.timeout;
-
-    req.onreadystatechange = () => {
-      if (req.readyState === 4) {
-        if (req.status === 200) {
-          try {
-            const response = JSON.parse(req.responseText);
-            callback({ status: req.status, response });
-          } catch (e) {
-            console.error(e);
-          }
-        } else {
-          console.error(`上报失败: data = ${JSON.stringify(data)}`);
-          callback({ status: req.status, error: `ajax: ${url}请求失败` });
-        }
-      }
-    };
-    if (!Array.isArray(data)) {
-      data = [data];
-    }
-    req.send(JSON.stringify(data));
   }
 
   // 获取指定的配置项
@@ -377,8 +226,8 @@ class Track {
     const track_single_page = this.getConfig("track_single_page");
 
     if (track_single_page) {
-      // 这里的 popsate 事件能监听到 history.pushState 和 history.replaceState
-      // history.ts 文件中已经重写了
+      // 这里的 popstate 事件能监听到 history.pushState 和 history.replaceState
+      // polyfill.ts 文件中已经重写了
       utils.addEvent(window, "popstate", () => {
         this.track("ph_page_view", { page: document.location.href });
       });
@@ -386,7 +235,7 @@ class Track {
   }
 
   public track_input_time() {
-    document.body.addEventListener("focusin", (event: Event) => {
+    function onFocusin(e: Event) {
       const el: HTMLInputElement = event.target as HTMLInputElement;
       const tag_type: string = el.getAttribute("type");
       // 只对输入控件
@@ -399,10 +248,9 @@ class Track {
         el.dataset.focus_time = String(Date.now());
         el.dataset.focus_value = el.value;
       }
-    });
+    }
 
-    // 监听 focusout 事件，会在 input 失去焦点时触发，此事件支持冒泡
-    document.body.addEventListener("focusout", (event: Event) => {
+    function onFocusout(e: Event) {
       // const target = event.target;
       const target: HTMLInputElement = event.target as HTMLInputElement;
       const tag_name: string = target.tagName.toLowerCase();
@@ -422,11 +270,52 @@ class Track {
         // 调用 track() 方法发送自定义事件
         this.track("$input_time", { $input_time: requestData });
       }
-    });
+    }
+
+    utils.addEvent(document.body, "focusin", onFocusin.bind(this));
+    utils.addEvent(document.body, "focusout", onFocusout.bind(this));
+
+    // document.body.addEventListener("focusin", (event: Event) => {
+    //   const el: HTMLInputElement = event.target as HTMLInputElement;
+    //   const tag_type: string = el.getAttribute("type");
+    //   // 只对输入控件
+    //   if (
+    //     (utils.isTag(el, "input") &&
+    //       ["text", "number"].indexOf(tag_type) !== -1) ||
+    //     utils.isTag(el, "textarea")
+    //   ) {
+    //     // 如果当前元素是 input 输入框
+    //     el.dataset.focus_time = String(Date.now());
+    //     el.dataset.focus_value = el.value;
+    //   }
+    // });
+
+    // 监听 focusout 事件，会在 input 失去焦点时触发，此事件支持冒泡
+    // document.body.addEventListener("focusout", (event: Event) => {
+    //   // const target = event.target;
+    //   const target: HTMLInputElement = event.target as HTMLInputElement;
+    //   const tag_name: string = target.tagName.toLowerCase();
+    //   if (tag_name === "input") {
+    //     // 如果当前元素是 input 输入框
+    //     const now = new Date().valueOf();
+    //
+    //     const begin_time: number = parseInt(target.dataset.focus_time, 10);
+    //     const requestData = {
+    //       input_name: target.name,
+    //       begin_time: parseInt(target.dataset.focus_time),
+    //       end_time: now,
+    //       event_duration: now - begin_time,
+    //       previous_value: target.dataset.focus_value,
+    //       after_value: target.value
+    //     };
+    //     // 调用 track() 方法发送自定义事件
+    //     this.track("$input_time", { $input_time: requestData });
+    //   }
+    // });
   }
 
   // dom track
-  track_link(
+  public track_link(
     querySelector: string | Node,
     event_name: string,
     props: object,
@@ -436,7 +325,7 @@ class Track {
     link.track(querySelector, event_name, props, callback);
   }
 
-  track_form(
+  public track_form(
     querySelector: string | Node,
     event_name: string,
     props: object,

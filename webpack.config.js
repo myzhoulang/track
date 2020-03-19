@@ -30,6 +30,6 @@ module.exports = {
     extensions: ['.ts', '.js' ]
   },
   plugins: [
-    new BundleAnalyzerPlugin()
+    // new BundleAnalyzerPlugin()
   ]
 };
