@@ -1,4 +1,3 @@
-import utils from "./utils";
 const queryString = require("query-string");
 const engines = ["google", "baidu", "so", "sogou", "bing"];
 

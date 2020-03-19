@@ -1,4 +1,4 @@
-import store from "./Store";
+import { store } from "./store";
 import { STORE_KEY, BATCH_SEND_DEFAULT_OPTIONS } from "./const";
 
 const querystring = require("query-string");
@@ -83,7 +83,7 @@ export function send_request(
     return;
   }
 
-  const _callback:Callback = (res: TrackResponse) => {
+  const _callback: Callback = (res: TrackResponse) => {
     callback(res);
   };
 
@@ -104,7 +104,7 @@ export function send_request(
 // 在页面 unload  或者 刷新的时候
 // 使用该方法发送数据
 export function send_store(e: Event) {
-  e.returnValue = false
+  e.returnValue = false;
   console.log("send_store");
   const url = this.getConfig("api_host");
   const data = store.get(STORE_KEY);
@@ -115,13 +115,17 @@ export function send_store(e: Event) {
   beacon_request(url, data);
 }
 
-export function beacon_request(data: object, callback?: () => void, options: SendOptions = {}) {
+export function beacon_request(
+  data: object,
+  callback?: () => void,
+  options: SendOptions = {}
+) {
   const url = this.getConfig("api_host");
   if (typeof navigator.sendBeacon === "function") {
     // 判断是否进入队列
     // 进入队列就默认发送成功
     // 清空数据
-    const blob:Blob = new Blob([JSON.stringify(data)], {
+    const blob: Blob = new Blob([JSON.stringify(data)], {
       type: "application/x-www-form-urlencoded"
       // type: 'application/json'
     });
@@ -131,7 +135,6 @@ export function beacon_request(data: object, callback?: () => void, options: Sen
     ajax_request(url, data, options, callback);
   }
 }
-
 
 // 批量发送事件
 export function seed_batch() {

@@ -13,7 +13,7 @@ import {
   Callback
 } from "./request";
 import { STORE_KEY, EVENTS, BATCH_SEND_DEFAULT_OPTIONS } from "./const";
-import store from "./Store";
+import { store } from "./store";
 import "./polyfill";
 
 // ✔️ TODO: search engine
@@ -24,7 +24,7 @@ import "./polyfill";
 // TODO: 计算两个track 之间的时间 (x)
 // ✔️ TODO: 敏感数据列表
 // ✔️ TODO: 单一和批量发送数据 https://manual.sensorsdata.cn/sa/latest/tech_sdk_client_web_use-7538919.html
-// TODO: 内置一些埋点事件 $pageview $pageleave $input_time $page_load
+// ✔️ TODO: 内置一些埋点事件 $pageview $pageleave $input_time $page_load
 
 interface TrackConfigOptions {
   auto_track?: boolean;
@@ -37,7 +37,7 @@ interface TrackConfigOptions {
   api_host?: string;
   lib_instance_name?: string;
   filter_sensitive_data?: boolean;
-  send_cookie?:boolean;
+  send_cookie?: boolean;
   track_single_page?: boolean;
   batch_send?: boolean | BatchSendConfig;
   [key: string]: any;
@@ -90,6 +90,11 @@ class Track {
 
     // track_pageleave
     utils.addEvent(window, "unload", this.track_pageleave.bind(this));
+    // utils.addEvent(window, 'load', () => {
+    //   // const _a: PerformanceNavigationTiming = performance.getEntriesByType("navigation");
+    //   // console.log(performance.navigation.type)
+    //   // console.log(( performance.getEntriesByType("navigation")[0]))
+    // })
 
     // 是否开启batch_send
     // 开启批量处理的时候在页面刷新、跳转导致刷新、关闭的时候会导致
@@ -234,6 +239,7 @@ class Track {
   }
 
   public track_pageleave(page: string = document.location.href) {
+    console.log(document.referrer)
     this.track("$pageleave", { page });
   }
 
