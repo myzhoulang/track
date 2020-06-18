@@ -165,7 +165,7 @@ export const auto_track = {
         $el_href: href,
         $el_value: value,
         $el_text: elementText
-      }
+      };
       if(linkTrack){
         options.send_beacon = true
       }

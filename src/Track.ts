@@ -10,7 +10,7 @@ import {
   beacon_request,
   BatchSendConfig,
   TrackResponse,
-  Callback
+  Callback,
 } from "./request";
 import { STORE_KEY, EVENTS, BATCH_SEND_DEFAULT_OPTIONS } from "./const";
 import { store } from "./store";
@@ -65,7 +65,7 @@ class Track {
         track_property_blacklist: ["style", "data-row-key"],
         filter_sensitive_data: true,
         request_type: "XHR",
-        batch_send: BATCH_SEND_DEFAULT_OPTIONS
+        batch_send: BATCH_SEND_DEFAULT_OPTIONS,
       },
       config
     );
@@ -119,6 +119,7 @@ class Track {
     }
   }
 
+  // 全埋点
   public auto_track() {
     auto_track.init(this);
   }
@@ -145,7 +146,7 @@ class Track {
     // 收集从搜索引擎搜索跳转过来的数据
     const $search_engine = {
       $engine: search_engine.get_search_engine(referrer),
-      $keyword: search_engine.get_search_keyword(referrer)
+      $keyword: search_engine.get_search_keyword(referrer),
     };
 
     // 当前页面的数据
@@ -153,7 +154,7 @@ class Track {
       $url: window.location.href,
       $referrer: referrer,
       $title: document.title,
-      $query: utils.getQueryParams()
+      $query: utils.getQueryParams(),
     };
 
     // 组装数据
@@ -162,20 +163,20 @@ class Track {
         ...this.public_data,
         $search_engine,
         $current_page,
-        $base_properties
+        $base_properties,
       },
       props
     );
     const track_property_blacklist = this.getConfig("track_property_blacklist");
     if (Array.isArray(track_property_blacklist)) {
-      track_property_blacklist.forEach(item => {
+      track_property_blacklist.forEach((item) => {
         // @ts-ignore
         delete properties[item];
       });
     }
     const data = utils.strip_empty_properties({
       event_name,
-      properties
+      properties,
     });
 
     // 使用 navigator.sendBeacon 发送数据
@@ -205,12 +206,7 @@ class Track {
     const batch_send_config: boolean | BatchSendConfig = this.getConfig(
       "batch_send"
     );
-
-    if (utils.isBoolean(batch_send_config) && batch_send_config === false) {
-      return false;
-    }
-
-    return true;
+    return !(utils.isBoolean(batch_send_config) && batch_send_config === false);
   }
 
   // 获取指定的配置项
@@ -239,13 +235,12 @@ class Track {
   }
 
   public track_pageleave(page: string = document.location.href) {
-    console.log(document.referrer)
     this.track("$pageleave", { page });
   }
 
   public track_input_time() {
     function onFocusin(e: Event) {
-      const el: HTMLInputElement = event.target as HTMLInputElement;
+      const el: HTMLInputElement = e.target as HTMLInputElement;
       const tag_type: string = el.getAttribute("type");
       // 只对输入控件
       if (
@@ -261,7 +256,7 @@ class Track {
 
     function onFocusout(e: Event) {
       // const target = event.target;
-      const target: HTMLInputElement = event.target as HTMLInputElement;
+      const target: HTMLInputElement = e.target as HTMLInputElement;
       const tag_name: string = target.tagName.toLowerCase();
       if (tag_name === "input") {
         // 如果当前元素是 input 输入框
@@ -274,7 +269,7 @@ class Track {
           end_time: now,
           event_duration: now - begin_time,
           previous_value: target.dataset.focus_value,
-          after_value: target.value
+          after_value: target.value,
         };
         // 调用 track() 方法发送自定义事件
         this.track("$input_time", { $input_time: requestData });

@@ -51,7 +51,6 @@ const utils = {
 
   strip_empty_properties(obj: object) {
     const ret: { [key: string]: any } = {};
-
     Object.entries(obj).forEach(([key, value]) => {
       if (value === null || value === undefined || utils.isEmptyObject(value)) {
         return;

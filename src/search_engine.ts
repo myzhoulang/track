@@ -11,10 +11,10 @@ interface Params {
 
 const search_engine = {
   // 获取通过什么搜索引擎搜索到的
-  get_search_engine(referrer: string) {
+  get_search_engine(referrer: string): string {
     let engine: string = "";
 
-    engines.forEach(item => {
+    engines.forEach((item) => {
       if (referrer.search(`https?://(.*)"${item}.com`) === 0) {
         engine = item;
       } else if (referrer.search(`https?://(.*)google.([^/?]*)`) === 0) {
@@ -26,13 +26,13 @@ const search_engine = {
   },
 
   // 获取通过搜索引擎的哪一个关键字搜索的
-  get_search_keyword(referrer: string) {
-    const engine = search_engine.get_search_engine(referrer);
+  get_search_keyword(referrer: string): string {
+    const engine: string = search_engine.get_search_engine(referrer);
     const engine_params: Params = {
       google: "q",
       baidu: "wd",
       sogou: "query",
-      so: "q"
+      so: "q",
     };
     const filed: string = engine_params[engine];
     const result = queryString.parseUrl(referrer);
@@ -41,7 +41,7 @@ const search_engine = {
       keyword = result.query[filed];
     }
     return keyword;
-  }
+  },
 };
 
 export default search_engine;
