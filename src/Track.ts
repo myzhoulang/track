@@ -40,7 +40,6 @@ interface TrackConfigOptions {
   send_cookie?: boolean;
   track_single_page?: boolean;
   batch_send?: boolean | BatchSendConfig;
-  [key: string]: any;
 }
 
 class Track {
@@ -210,12 +209,10 @@ class Track {
   }
 
   // 获取指定的配置项
-  public getConfig(key: string): any {
-    const value: boolean | string[] | string | number = this.config[key];
-    if (utils.isUndefined(value)) {
-      return null;
-    }
-    return value;
+  public getConfig<T extends keyof TrackConfigOptions>(
+    key: T
+  ): TrackConfigOptions[T] {
+    return this.config[key];
   }
 
   // track-pageview
@@ -284,7 +281,7 @@ class Track {
 
   // dom track
   public track_link(
-    querySelector: string | Node,
+    querySelector: string | Element,
     event_name: string,
     props: object,
     callback?: () => void
@@ -294,7 +291,7 @@ class Track {
   }
 
   public track_form(
-    querySelector: string | Node,
+    querySelector: string | Element,
     event_name: string,
     props: object,
     callback?: Callback

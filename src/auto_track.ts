@@ -124,7 +124,7 @@ export const auto_track = {
         current = current.parentNode as Element;
       }
       let linkTrack: LinkTrack;
-      targetList.forEach(element => {
+      targetList.forEach((element) => {
         if (utils.isTag(element, "a")) {
           linkTrack = new LinkTrack(this.ph);
           linkTrack.event_handler(event, element, options);
@@ -164,10 +164,10 @@ export const auto_track = {
         $elements: elements,
         $el_href: href,
         $el_value: value,
-        $el_text: elementText
+        $el_text: elementText,
       };
-      if(linkTrack){
-        options.send_beacon = true
+      if (linkTrack) {
+        options.send_beacon = true;
       }
       instance.track("$web_click", props, options, callback);
 
@@ -179,7 +179,7 @@ export const auto_track = {
     let el_text = "";
     const childNodes = el.childNodes;
     if (childNodes && childNodes.length > 0) {
-      childNodes.forEach(item => {
+      childNodes.forEach((item) => {
         const textContent: string = item.textContent;
         if (utils.isTextNode(item as Element) && textContent) {
           const text = textContent
@@ -189,6 +189,7 @@ export const auto_track = {
             .join("")
             .replace(/[\r\n]/g, " ")
             .replace(/[ ]+/g, " ")
+            // 截取255位 防止数据太大
             .substring(0, 255);
 
           el_text += text;
@@ -206,14 +207,14 @@ export const auto_track = {
       classNames: utils.getClassNames(el),
       id: el.getAttribute("id"),
       tag_name: tag_name,
-      el_text: this.getSafeText(el)
+      el_text: this.getSafeText(el),
     };
     if (utils.isTag(el, "body")) {
       return props;
     }
 
     const attr_names: any[] = el.getAttributeNames();
-    attr_names.forEach(attr_name => {
+    attr_names.forEach((attr_name) => {
       const no_track_rule = this.ph.getConfig("track_property_blacklist");
 
       // 排除无障碍属性
@@ -252,13 +253,13 @@ export const auto_track = {
     return utils.strip_empty_properties(props);
   },
 
-  prev(el: Element | Node) {
+  prev(el: Element) {
     const prev = (el as Element).previousElementSibling;
     if (prev) {
       return prev;
     } else {
       do {
-        el = el.previousSibling;
+        el = el.previousElementSibling;
       } while (el && utils.isElement(el));
 
       if (utils.isElement(el)) {
@@ -267,5 +268,5 @@ export const auto_track = {
 
       return null;
     }
-  }
+  },
 };

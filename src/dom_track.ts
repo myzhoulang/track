@@ -18,14 +18,14 @@ class DomTrack {
   }
 
   public track(
-    querySelector: string | Node,
+    querySelector: string | Element,
     event_name: string,
-    props: ((element: Node) => object) | object,
+    props: ((element: Element) => object) | object,
     callback?: () => void
   ) {
-    let elements: Node[] = [];
+    let elements: Element[] = [];
     if (utils.isElement(querySelector)) {
-      elements.push(querySelector as Node);
+      elements.push(querySelector as Element);
     } else {
       elements = Array.prototype.slice.call(
         document.querySelectorAll(querySelector as string)
@@ -34,7 +34,7 @@ class DomTrack {
 
     if (elements.length < 1) return;
 
-    elements.forEach(el => {
+    elements.forEach((el) => {
       utils.addEvent(el, this.override_event, (event: Event) => {
         const options: TrackOptions = {
           callback_fired: false,
@@ -60,7 +60,7 @@ class DomTrack {
       });
     });
   }
-  protected event_handler(event: Event, el: Node, options: object) {}
+  protected event_handler(event: Event, el: Element, options: object) {}
 
   public track_callback(
     props: object,
@@ -119,7 +119,6 @@ class LinkTrack extends DomTrack {
     if (options.new_tab) {
       return;
     }
-
     setTimeout(() => (window.location.href = options.href), 0);
   }
 }

@@ -1,16 +1,13 @@
 {
   "compilerOptions": {
-    "lib": ["dom","dom.iterable","esnext"],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "noImplicitAny": true,
     "module": "es6",
     "target": "es5",
     "jsx": "react",
     "allowJs": true,
+    "outDir": "./src",
     "typeRoots": ["./node_modules/@types", "./typings"]
   },
-  "exclude": [
-    "dist",
-    "node_modules",
-    "example"
-  ]
+  "exclude": ["dist", "node_modules", "example"]
 }
