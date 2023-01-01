@@ -16,11 +16,11 @@
   "devDependencies": {
     "@types/node": "^13.9.0",
     "prettier": "1.19.1",
-    "ts-loader": "^6.2.1",
+    "ts-loader": "^9.4.2",
     "typescript": "^3.8.3",
-    "webpack": "^4.42.0",
+    "webpack": "^5.75.0",
     "webpack-bundle-analyzer": "^3.6.1",
-    "webpack-cli": "^3.3.11"
+    "webpack-cli": "^5.0.1"
   },
   "dependencies": {
     "query-string": "^6.11.1"
